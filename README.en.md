@@ -1,28 +1,31 @@
+[简体中文](README.md) | **English**
+
 # elib_arm_cm_backtrace
 
-ARM Cortex-M Stack Backtrace Library
+ARM Cortex-M stack backtrace library
 
 ## Project Overview
 
-elib_arm_cm_backtrace is a stack backtrace library designed for ARM Cortex-M microcontrollers. This project aims to assist embedded developers in diagnosing and debugging program crashes and exceptions by tracing the call stack to locate the problematic code.
+elib_arm_cm_backtrace is a stack backtrace library for ARM Cortex-M microcontrollers. The project helps embedded developers diagnose and debug where program crashes and exceptions happen, locating the faulty code by walking the call stack.
 
 ## Features
 
 - ARM Cortex-M stack frame unwinding
-- Stack backtrace under exception/interrupt context
-- Output of call chain information
+- Backtracing in exception/interrupt context
+- Call chain output
 - Support for multiple Cortex-M architectures (M0/M3/M4/M7, etc.)
+- **Automatic MSP/PSP dual-stack detection** (enables backtracing from RTOS task exceptions)
 - Multi-compiler support (GCC/Keil/IAR)
-- Works on Cortex-M0 without frame pointer activation, though `-fno-omit-frame-pointer` compilation option is recommended for better backtrace quality
-- Can fallback to stack scanning when frame pointer is unavailable or unreliable
+- Runs on Cortex-M0 without activating the frame pointer, though `-fno-omit-frame-pointer` is recommended for higher-quality backtraces
+- Falls back to stack scanning when the frame pointer is unavailable or unreliable
 - Robust under stack overflow conditions (Thumb address validation)
 - Memory-safe design
 
 ## Quick Start
 
-### Include the Project
+### Adding the Project
 
-Add the `elib_arm_cm_backtrace` source files to your project:
+Add the relevant `elib_arm_cm_backtrace` source files to your project:
 
 ```c
 #include "elib_arm_cm_backtrace.h"
@@ -30,13 +33,13 @@ Add the `elib_arm_cm_backtrace` source files to your project:
 
 ### Basic Usage
 
-Call the backtrace function when a crash or exception occurs:
+Call the backtrace function when the program crashes or an exception occurs:
 
 ```c
-elib_arm_cm_backtrace();
+elib_arm_cm_backtrace();  // auto-detect MSP/PSP
 ```
 
-## Configuration Notes
+## Configuration
 
 Depending on your chip model, you may need to configure the following parameters:
 
@@ -45,7 +48,7 @@ Depending on your chip model, you may need to configure the following parameters
 
 ## Usage
 
-### 1. Configure Stack Range (Optional)
+### 1. Configure the Stack Range (optional)
 
 ```c
 #define ARM_CM_BACKTRACE_STACK_START  0x20000000
@@ -53,141 +56,45 @@ Depending on your chip model, you may need to configure the following parameters
 #define ARM_CM_BACKTRACE_MAX_DEPTH    32
 ```
 
-### 2. Configure Flash Region (Optional, for code address validation)
+### 2. Configure the Flash Region (optional, for code address validation)
 
 ```c
 #define ARM_CM_BACKTRACE_FLASH_START  0x08000000
 #define ARM_CM_BACKTRACE_FLASH_END    0x08100000
 ```
 
-> Code address validation filters garbage data during stack overflow and improves reliability in M0 environments.
+> Code address validation filters garbage data during a stack overflow and improves reliability in an M0 environment.
 
 ### 3. Build Requirements
 
-For best results, use frame pointer optimization:
-
-## Quick Start
-
-### Include the Project
-
-Add the `elib_arm_cm_backtrace` source files to your project:
-
-```c
-#include "elib_arm_cm_backtrace.h"
-```
-
-### Basic Usage
-
-Call the backtrace function when a crash or exception occurs:
-
-```c
-elib_arm_cm_backtrace();
-```
-
-## Configuration Notes
-
-Depending on your chip model, you may need to configure the following parameters:
-
-- Stack start address
-- Flash and RAM regions
-
-## Usage
-
-### 1. Configure Stack Range (Optional)
-
-```c
-#define ARM_CM_BACKTRACE_STACK_START  0x20000000
-#define ARM_CM_BACKTRACE_STACK_END    0x20030000
-#define ARM_CM_BACKTRACE_MAX_DEPTH    32
-```
-
-### 2. Configure Flash Region (Optional, for code address validation)
-
-```c
-#define ARM_CM_BACKTRACE_FLASH_START  0x08000000
-#define ARM_CM_BACKTRACE_FLASH_END    0x08100000
-```
-
-> Code address validation filters garbage data during stack overflow.
-
-### 3. Build Requirements
-
-For best results, use frame pointer optimization:
+For best results, frame pointer optimization is recommended:
 
 **GCC/Clang:**
 ```makefile
 CFLAGS += -fno-omit-frame-pointer
 ```
 
-**Notes for M0 Environments:**
-- The library works even without `-fno-omit-frame-pointer` by relying on stack scanning
-- If your application uses interrupts, consider the impact of stack usage
-- Ensure that stack boundaries (ARM_CM_BACKTRACE_STACK_START/END) are properly configured for your chip
-
-### 4. Usage Example
-
-```c
-#include "elib_arm_cm_backtrace.h"
-
-// Implement output callback (UART/RTT/other)
-void my_print(const char *fmt, ...) {
-    char buffer[128];
-    va_list args;
-    va_start(args, fmt);
-    vsnprintf(buffer, sizeof(buffer), fmt, args);
-    va_end(args);
-
-    // Send to UART
-    HAL_UART_Transmit(&huart1, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
-}
-
-void HardFault_Handler(void) {
-    elib_arm_cm_backtrace_init(my_print);
-    elib_arm_cm_backtrace();
-    while(1);  // Infinite loop to prevent reset
-}
-```
-
-### 5. Special Considerations for M0 Chips
-
-For Cortex-M0 platforms, the output may look slightly different from more advanced cores since the frame pointer chain method might not be available:
-```
-Stack Backtrace:0x08005ABC 0x08004F20
-Stack Scan:0x08003A84 0x08002100 0x080011A0
-```
-
-> In M0 environments, the primary backtrace might be shorter but can be supplemented by the additional addresses found through stack scanning in the `Stack Scan` section.
-
-### 6. Offline Parsing
-
-Normal output:
-```
-Stack Backtrace:0x08005ABC 0x08004F20 0x08003A84
-```
-
-On stack overflow or FP failure (additional stack scan output):
-```
-Stack Backtrace:0x08005ABC 0x08004F20
-Stack Scan:0x08003A84 0x08002100
-```
-
-> `Stack Backtrace` - trusted call chain (from hardware exception frame and available frame pointers)
-> `Stack Scan` - fallback info (from stack memory scan)
-
 **Keil (ARM Compiler 5/6):**
-- Target Options → ARM Compiler → Misc Controls: add `-fno-omit-frame-pointer`
-- Or in code: `#pragma import(__use_full_frame_pointer)`
+- Add this under Target Options → ARM Compiler → Misc Controls: `-fno-omit-frame-pointer`
+- Or use this in code: `#pragma import(__use_full_frame_pointer)`
 
 **IAR Embedded Workbench:**
 - Project → Options → C/C++ Compiler → Optimizations
-- Enable frame pointer option
+- Enable the frame pointer option
 
-### 6. Usage Example
+**M0 environment notes:**
+- The library works even without `-fno-omit-frame-pointer` enabled, relying on the stack scanning feature
+- If the application uses interrupts, consider the effect on stack usage
+- Make sure the stack bounds are configured correctly for your chip (ARM_CM_BACKTRACE_STACK_START/END)
+
+### 4. Usage Example
+
+#### Bare-Metal Application (MSP only)
 
 ```c
 #include "elib_arm_cm_backtrace.h"
 
-// Implement output callback (UART/RTT/other)
+// Implement the output callback (UART/RTT/other)
 void my_print(const char *fmt, ...) {
     char buffer[128];
     va_list args;
@@ -195,39 +102,106 @@ void my_print(const char *fmt, ...) {
     vsnprintf(buffer, sizeof(buffer), fmt, args);
     va_end(args);
 
-    // Send to UART
+    // Send to the UART
     HAL_UART_Transmit(&huart1, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
 }
 
 void HardFault_Handler(void) {
     elib_arm_cm_backtrace_init(my_print);
-    elib_arm_cm_backtrace();
-    while(1);  // Infinite loop to prevent reset
+    elib_arm_cm_backtrace();  // auto-detect MSP/PSP
+    while(1);  // spin forever to prevent a reset
 }
 ```
 
-### 5. Offline Parsing
+#### RTOS Application (PSP)
+
+The library detects automatically whether the exception came from MSP or PSP; no extra configuration is needed:
+
+```c
+void HardFault_Handler(void) {
+    elib_arm_cm_backtrace_init(my_print);
+    elib_arm_cm_backtrace();  // read the exception frame from the right stack automatically
+    while(1);
+}
+```
+
+#### Specifying the Stack Pointer Manually (advanced usage)
+
+```c
+void HardFault_Handler(void) {
+    elib_arm_cm_backtrace_init(my_print);
+
+    // Option 1: auto-detect (recommended)
+    elib_arm_cm_backtrace();
+
+    // Option 2: force PSP
+    elib_arm_cm_backtrace_ex(ARM_CM_BACKTRACE_SP_PSP);
+
+    // Option 3: force MSP
+    elib_arm_cm_backtrace_ex(ARM_CM_BACKTRACE_SP_MSP);
+
+    while(1);
+}
+```
+
+### 5. MSP/PSP Dual-Stack Support
+
+ARM Cortex-M processors use a dual-stack mechanism:
+
+| Scenario | Stack pointer used | Library support |
+|------|-------------|---------|
+| Bare-metal application (thread mode) | MSP | Automatic |
+| RTOS task (thread mode) | PSP | Automatic |
+| Exception/interrupt handler | MSP | Automatic |
+
+The library inspects the `EXC_RETURN` value to tell which stack holds the exception frame, with no user intervention.
+
+### 6. Output Format
 
 Normal output:
 ```
 Stack Backtrace:0x08005ABC 0x08004F20 0x08003A84
 ```
 
-On stack overflow (FP chain fails), additional stack scan output:
+On stack overflow or an invalid FP (stack scan results are printed as well):
 ```
 Stack Backtrace:0x08005ABC 0x08004F20
 Stack Scan:0x08003A84 0x08002100
 ```
 
-> `Stack Backtrace` - trusted call chain (from frame pointer chain)
-> `Stack Scan` - fallback info (from stack memory scan)
+> `Stack Backtrace` - the trustworthy call chain (from the hardware exception frame and any usable frame pointers)
+> `Stack Scan` - fallback information (from scanning stack memory)
 
-Use addr2line to parse:
+### 7. Offline Resolution
+
+Resolve the addresses with addr2line:
+
 ```bash
 arm-none-eabi-addr2line -e your_firmware.elf -f 0x08005ABC 0x08004F20 0x08003A84
+```
+
+## API Reference
+
+```c
+// Initialize: register the output callback
+void elib_arm_cm_backtrace_init(elib_arm_cm_backtrace_print_fn print_fn);
+
+// Main backtrace function (auto-detects MSP/PSP)
+void elib_arm_cm_backtrace(void);
+
+// Extended backtrace function (the stack pointer type can be forced)
+void elib_arm_cm_backtrace_ex(elib_arm_cm_backtrace_sp_type_t sp_type);
+
+// Backtrace with an exception stack frame (the frame pointer is passed in by the user)
+void elib_arm_cm_backtrace_from_frame(void *stack_frame);
+
+// Get the current MSP value
+uint32_t elib_arm_cm_backtrace_get_msp(void);
+
+// Get the current PSP value
+uint32_t elib_arm_cm_backtrace_get_psp(void);
 ```
 
 ## License
 
 MIT License
-
